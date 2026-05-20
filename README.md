@@ -3,7 +3,7 @@
 An AI response evaluation tool for comparing model answers, scoring response
 quality, and creating structured human feedback data for AI training.
 
-<img src="./screenshot/SS1.png" alt="AI Response Evaluation Tool screenshot 1" width="50%"> <img src="./screenshot/SS2.png" alt="AI Response Evaluation Tool screenshot 2" width="50%">
+<img src="./screenshot/SS1.png" alt="AI Response Evaluation Tool screenshot 1" width="40%"> <img src="./screenshot/SS2.png" alt="AI Response Evaluation Tool screenshot 2" width="40%">
 
 ## Project Overview
 
