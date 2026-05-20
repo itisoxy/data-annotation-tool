@@ -3,6 +3,10 @@
 An AI response evaluation tool for comparing model answers, scoring response
 quality, and creating structured human feedback data for AI training.
 
+![AI Response Evaluation Tool screenshot 1](screenshot/SS1.png)
+
+![AI Response Evaluation Tool screenshot 2](screenshot/SS2.png)
+
 ## Project Overview
 
 The app presents one user prompt with two candidate model answers so AI trainers
@@ -40,10 +44,6 @@ This project demonstrates that workflow in a simple local Next.js app.
 - React 19
 - TypeScript
 - Tailwind CSS 4
-
-## Screenshots
-
-Add screenshots of the comparison panel, scoring controls, and export view here.
 
 ## Future Improvements
 
