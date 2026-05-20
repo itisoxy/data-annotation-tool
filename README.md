@@ -3,9 +3,9 @@
 An AI response evaluation tool for comparing model answers, scoring response
 quality, and creating structured human feedback data for AI training.
 
-![AI Response Evaluation Tool screenshot 1](screenshot/SS1.png)
+<img src="./screenshot/SS1.png" alt="AI Response Evaluation Tool screenshot 1" width="100%">
 
-![AI Response Evaluation Tool screenshot 2](screenshot/SS2.png)
+<img src="./screenshot/SS2.png" alt="AI Response Evaluation Tool screenshot 2" width="100%">
 
 ## Project Overview
 
