@@ -6,6 +6,18 @@ export type ConfidenceLevel = 'low' | 'medium' | 'high'
 
 export type EvaluationTaskStatus = 'pending' | 'reviewed'
 
+export type AssistedReviewWinner = 'answerA' | 'answerB' | 'tie'
+
+export type QualityLabel =
+  | 'helpful'
+  | 'clear'
+  | 'accurate'
+  | 'vague'
+  | 'unsafe'
+  | 'overconfident'
+  | 'irrelevant'
+  | 'poorly structured'
+
 export type EvaluationTask = {
   id: string
   prompt: string
@@ -18,14 +30,30 @@ export type EvaluationTask = {
 
 export type AnswerScores = Record<ScoreCriterion, number>
 
+export type AssistedAnswerReview = {
+  sentimentScore: number
+  toxicityRiskScore: number
+  qualityLabels: QualityLabel[]
+}
+
+export type AssistedReview = {
+  answerA: AssistedAnswerReview
+  answerB: AssistedAnswerReview
+  suggestedWinner: AssistedReviewWinner
+  usedMockData: boolean
+  reviewedAt: string
+}
+
 export type EvaluationRecord = {
   taskId: string
   prompt: string
   selectedWinner: WinnerChoice
+  humanFinalDecision: AssistedReviewWinner
   scores: {
     answerA: AnswerScores
     answerB: AnswerScores
   }
+  assistedReview?: AssistedReview
   reviewerNotes: string
   reasonForChoice: string
   confidence: ConfidenceLevel
@@ -45,6 +73,23 @@ export const winnerLabels: Record<WinnerChoice, string> = {
   tie: 'Tie / both are equally good',
   neither: 'Neither is acceptable',
 }
+
+export const humanDecisionLabels: Record<AssistedReviewWinner, string> = {
+  answerA: 'Answer A',
+  answerB: 'Answer B',
+  tie: 'Tie',
+}
+
+export const qualityLabels: QualityLabel[] = [
+  'helpful',
+  'clear',
+  'accurate',
+  'vague',
+  'unsafe',
+  'overconfident',
+  'irrelevant',
+  'poorly structured',
+]
 
 export const evaluationTasks: EvaluationTask[] = [
   {

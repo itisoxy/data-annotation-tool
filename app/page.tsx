@@ -3,8 +3,12 @@
 import { useMemo, useState } from 'react'
 import {
   evaluationTasks,
+  humanDecisionLabels,
   scoreCriteria,
   winnerLabels,
+  type AssistedAnswerReview,
+  type AssistedReview,
+  type AssistedReviewWinner,
   type AnswerScores,
   type ConfidenceLevel,
   type EvaluationRecord,
@@ -23,10 +27,21 @@ const defaultScores: AnswerScores = {
 }
 
 const winnerChoices: WinnerChoice[] = ['answerA', 'answerB', 'tie', 'neither']
+const humanDecisionChoices: AssistedReviewWinner[] = ['answerA', 'answerB', 'tie']
 const confidenceLevels: ConfidenceLevel[] = ['low', 'medium', 'high']
 
 function formatWinner(choice: WinnerChoice) {
   return winnerLabels[choice]
+}
+
+function formatHumanDecision(choice: AssistedReviewWinner) {
+  return humanDecisionLabels[choice]
+}
+
+function winnerToHumanDecision(choice: WinnerChoice): AssistedReviewWinner {
+  if (choice === 'answerB') return 'answerB'
+  if (choice === 'tie') return 'tie'
+  return 'answerA'
 }
 
 function averageScore(scores: AnswerScores) {
@@ -40,14 +55,27 @@ function buildExportRows(records: EvaluationRecord[]) {
     prompt: record.prompt,
     selectedWinner: record.selectedWinner,
     selectedWinnerLabel: formatWinner(record.selectedWinner),
+    humanFinalDecision: record.humanFinalDecision,
+    humanFinalDecisionLabel: formatHumanDecision(record.humanFinalDecision),
     answerAHelpfulness: record.scores.answerA.helpfulness,
     answerAAccuracy: record.scores.answerA.accuracy,
     answerAClarity: record.scores.answerA.clarity,
     answerASafety: record.scores.answerA.safety,
+    answerASentimentScore: record.assistedReview?.answerA.sentimentScore ?? '',
+    answerAToxicityRiskScore: record.assistedReview?.answerA.toxicityRiskScore ?? '',
+    answerAQualityLabels: record.assistedReview?.answerA.qualityLabels.join('; ') ?? '',
     answerBHelpfulness: record.scores.answerB.helpfulness,
     answerBAccuracy: record.scores.answerB.accuracy,
     answerBClarity: record.scores.answerB.clarity,
     answerBSafety: record.scores.answerB.safety,
+    answerBSentimentScore: record.assistedReview?.answerB.sentimentScore ?? '',
+    answerBToxicityRiskScore: record.assistedReview?.answerB.toxicityRiskScore ?? '',
+    answerBQualityLabels: record.assistedReview?.answerB.qualityLabels.join('; ') ?? '',
+    modelSuggestedWinner: record.assistedReview?.suggestedWinner ?? '',
+    modelSuggestedWinnerLabel: record.assistedReview
+      ? formatHumanDecision(record.assistedReview.suggestedWinner)
+      : '',
+    usedMockAssistedReview: record.assistedReview?.usedMockData ?? '',
     confidence: record.confidence,
     reviewerNotes: record.reviewerNotes,
     reasonForChoice: record.reasonForChoice,
@@ -55,7 +83,7 @@ function buildExportRows(records: EvaluationRecord[]) {
   }))
 }
 
-function escapeCsvValue(value: string | number) {
+function escapeCsvValue(value: unknown) {
   const stringValue = String(value)
   if (!/[",\n]/.test(stringValue)) {
     return stringValue
@@ -71,14 +99,25 @@ function buildCsv(records: EvaluationRecord[]) {
     prompt: '',
     selectedWinner: '',
     selectedWinnerLabel: '',
+    humanFinalDecision: '',
+    humanFinalDecisionLabel: '',
     answerAHelpfulness: '',
     answerAAccuracy: '',
     answerAClarity: '',
     answerASafety: '',
+    answerASentimentScore: '',
+    answerAToxicityRiskScore: '',
+    answerAQualityLabels: '',
     answerBHelpfulness: '',
     answerBAccuracy: '',
     answerBClarity: '',
     answerBSafety: '',
+    answerBSentimentScore: '',
+    answerBToxicityRiskScore: '',
+    answerBQualityLabels: '',
+    modelSuggestedWinner: '',
+    modelSuggestedWinnerLabel: '',
+    usedMockAssistedReview: '',
     confidence: '',
     reviewerNotes: '',
     reasonForChoice: '',
@@ -93,6 +132,120 @@ function buildCsv(records: EvaluationRecord[]) {
         .join(','),
     ),
   ].join('\n')
+}
+
+function formatModelScore(value: number) {
+  return `${Math.round(value * 100)}%`
+}
+
+function AssistedAnswerSummary({
+  label,
+  review,
+}: {
+  label: 'A' | 'B'
+  review: AssistedAnswerReview
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <p className="text-sm font-semibold text-slate-950">Answer {label}</p>
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Sentiment
+          </dt>
+          <dd className="mt-1 font-semibold text-slate-900">
+            {formatModelScore(review.sentimentScore)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Risk
+          </dt>
+          <dd className="mt-1 font-semibold text-slate-900">
+            {formatModelScore(review.toxicityRiskScore)}
+          </dd>
+        </div>
+      </dl>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {review.qualityLabels.length > 0 ? (
+          review.qualityLabels.map((qualityLabel) => (
+            <span
+              key={qualityLabel}
+              className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-700"
+            >
+              {qualityLabel}
+            </span>
+          ))
+        ) : (
+          <span className="text-sm text-slate-500">No strong quality labels.</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AssistedReviewPanel({
+  review,
+  loading,
+  error,
+  onRun,
+}: {
+  review?: AssistedReview
+  loading: boolean
+  error: string
+  onRun: () => void
+}) {
+  return (
+    <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">
+            Hugging Face assisted review
+          </p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-950">
+            Model-assisted suggestion only
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Use these scores as a second pass. The human evaluator makes the
+            final decision.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={loading}
+          className="rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-300"
+        >
+          {loading ? 'Running review...' : 'Run Hugging Face Assisted Review'}
+        </button>
+      </div>
+
+      {error ? (
+        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+          {error}
+        </p>
+      ) : null}
+
+      {review ? (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-950">
+            <span className="font-semibold">
+              Suggested winner: {formatHumanDecision(review.suggestedWinner)}
+            </span>
+            {review.usedMockData ? (
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-cyan-800">
+                Mock data
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <AssistedAnswerSummary label="A" review={review.answerA} />
+            <AssistedAnswerSummary label="B" review={review.answerB} />
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
 }
 
 function ScoreControl({
@@ -210,10 +363,20 @@ function EvaluationPanel({
   const [selectedWinner, setSelectedWinner] = useState<WinnerChoice>(
     savedRecord?.selectedWinner ?? 'answerA',
   )
+  const [humanFinalDecision, setHumanFinalDecision] =
+    useState<AssistedReviewWinner>(
+      savedRecord?.humanFinalDecision ??
+        winnerToHumanDecision(savedRecord?.selectedWinner ?? 'answerA'),
+    )
   const [scores, setScores] = useState(savedRecord?.scores ?? {
     answerA: defaultScores,
     answerB: defaultScores,
   })
+  const [assistedReview, setAssistedReview] = useState<AssistedReview | undefined>(
+    savedRecord?.assistedReview,
+  )
+  const [assistedReviewLoading, setAssistedReviewLoading] = useState(false)
+  const [assistedReviewError, setAssistedReviewError] = useState('')
   const [reviewerNotes, setReviewerNotes] = useState(savedRecord?.reviewerNotes ?? '')
   const [reasonForChoice, setReasonForChoice] = useState(
     savedRecord?.reasonForChoice ?? '',
@@ -239,12 +402,45 @@ function EvaluationPanel({
     setSaved(false)
   }
 
+  async function runAssistedReview() {
+    setAssistedReviewLoading(true)
+    setAssistedReviewError('')
+
+    try {
+      const response = await fetch('/api/huggingface-review', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: task.prompt,
+          answerA: task.answerA,
+          answerB: task.answerB,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('The assisted review request failed.')
+      }
+
+      const review = (await response.json()) as AssistedReview
+      setAssistedReview(review)
+      setSaved(false)
+    } catch {
+      setAssistedReviewError('Unable to run assisted review right now.')
+    } finally {
+      setAssistedReviewLoading(false)
+    }
+  }
+
   function saveEvaluation() {
     onSave({
       taskId: task.id,
       prompt: task.prompt,
       selectedWinner,
+      humanFinalDecision,
       scores,
+      assistedReview,
       reviewerNotes,
       reasonForChoice,
       confidence,
@@ -293,6 +489,7 @@ function EvaluationPanel({
           scores={scores.answerA}
           onSelect={() => {
             setSelectedWinner('answerA')
+            setHumanFinalDecision('answerA')
             setSaved(false)
           }}
           onScoreChange={(criterion, value) =>
@@ -306,6 +503,7 @@ function EvaluationPanel({
           scores={scores.answerB}
           onSelect={() => {
             setSelectedWinner('answerB')
+            setHumanFinalDecision('answerB')
             setSaved(false)
           }}
           onScoreChange={(criterion, value) =>
@@ -314,9 +512,47 @@ function EvaluationPanel({
         />
       </div>
 
+      <AssistedReviewPanel
+        review={assistedReview}
+        loading={assistedReviewLoading}
+        error={assistedReviewError}
+        onRun={runAssistedReview}
+      />
+
       <fieldset className="mt-6">
         <legend className="text-sm font-semibold text-slate-900">
-          Choose the better response
+          Human final decision
+        </legend>
+        <p className="mt-1 text-sm text-slate-600">
+          The evaluator has the final say, even when the model suggests a winner.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          {humanDecisionChoices.map((choice) => {
+            const active = humanFinalDecision === choice
+            return (
+              <button
+                key={choice}
+                type="button"
+                onClick={() => {
+                  setHumanFinalDecision(choice)
+                  setSaved(false)
+                }}
+                className={`rounded-lg border px-4 py-3 text-sm font-semibold transition ${
+                  active
+                    ? 'border-cyan-700 bg-cyan-700 text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'
+                }`}
+              >
+                {formatHumanDecision(choice)}
+              </button>
+            )
+          })}
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-6">
+        <legend className="text-sm font-semibold text-slate-900">
+          Detailed winner choice
         </legend>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {winnerChoices.map((choice) => {
@@ -337,6 +573,7 @@ function EvaluationPanel({
                   checked={active}
                   onChange={() => {
                     setSelectedWinner(choice)
+                    setHumanFinalDecision(winnerToHumanDecision(choice))
                     setSaved(false)
                   }}
                 />
@@ -630,7 +867,8 @@ export default function HomePage() {
               <thead className="bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Prompt</th>
-                  <th className="px-4 py-3">Selected winner</th>
+                  <th className="px-4 py-3">Human decision</th>
+                  <th className="px-4 py-3">Model suggestion</th>
                   <th className="px-4 py-3">Answer A scores</th>
                   <th className="px-4 py-3">Answer B scores</th>
                   <th className="px-4 py-3">Confidence</th>
@@ -641,7 +879,7 @@ export default function HomePage() {
               <tbody className="divide-y divide-slate-200 bg-white">
                 {evaluations.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={7}>
+                    <td className="px-4 py-6 text-slate-500" colSpan={8}>
                       No reviewed evaluations yet.
                     </td>
                   </tr>
@@ -655,7 +893,33 @@ export default function HomePage() {
                         <span className="mt-1 block leading-6">{record.prompt}</span>
                       </td>
                       <td className="px-4 py-4 font-semibold text-slate-800">
-                        {formatWinner(record.selectedWinner)}
+                        {formatHumanDecision(record.humanFinalDecision)}
+                        <span className="mt-1 block text-xs font-medium text-slate-500">
+                          {formatWinner(record.selectedWinner)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-slate-700">
+                        {record.assistedReview ? (
+                          <>
+                            <span className="font-semibold text-slate-800">
+                              {formatHumanDecision(
+                                record.assistedReview.suggestedWinner,
+                              )}
+                            </span>
+                            <span className="mt-1 block text-xs text-slate-500">
+                              A sentiment{' '}
+                              {formatModelScore(
+                                record.assistedReview.answerA.sentimentScore,
+                              )}{' '}
+                              · B sentiment{' '}
+                              {formatModelScore(
+                                record.assistedReview.answerB.sentimentScore,
+                              )}
+                            </span>
+                          </>
+                        ) : (
+                          'Not run'
+                        )}
                       </td>
                       <td className="px-4 py-4 text-slate-700">
                         H {record.scores.answerA.helpfulness} · A{' '}
